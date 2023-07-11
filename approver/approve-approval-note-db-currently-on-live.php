@@ -1,0 +1,758 @@
+<?php
+	ob_start();
+	require_once("../includes/initialize.php"); 
+	require '../PHPMailer/PHPMailerAutoload.php';
+	//date_default_timezone_set('Asia/Calcutta');
+
+	// error_reporting(E_ALL);
+	// ini_set('display_errors', 1);
+
+	/*
+	foreach ($_POST as $key => $value) {
+		if (preg_match('/[\"\^*}!{><;`=]/', $value)){
+			$session->message("Remove Special Character"); redirect_to("approval.php");
+		} 
+	}
+	foreach ($_GET as $key => $value) {
+		if (preg_match('/[\"\^*}!{><;`=]/', $value)){
+			$session->message("Remove Special Character"); redirect_to("approval.php");
+		}
+	}
+	*/
+	?>
+	<!-- App css -->
+	<link href="assets/css/icons.min.css" rel="stylesheet" type="text/css" />
+	<link href="assets/css/app.min.css" rel="stylesheet" type="text/css" />
+	<!-- App js -->
+	<script src="assets/js/app.min.js"></script>
+
+	<script type="text/javascript">
+	    $(window).on('load',function(){
+	        $('#success-alert-modal').modal('show');
+	    });
+	</script>
+
+<?php
+	foreach ($_POST as $key => $value) {
+		//echo htmlspecialchars($key)." = ".htmlspecialchars($value)."<br>";
+	}
+	/*echo '<pre>';
+	print_r($_POST);
+	die;*/
+	//return false;
+
+	if ($session->is_employee_logged_in()){ 
+		$employee_reg = EmployeeReg::find_by_id($session->employee_id);
+
+		$emp_loc_sql = "Select * from employee_location where emp_id = {$employee_reg->id} AND emp_sub_role != 'Employee' Limit 1";
+
+		$employee_location = EmployeeLocation::find_by_sql($emp_loc_sql);
+
+		if(!$employee_location){
+			redirect_to("logout.php?"); 
+		}
+
+        if(!isset($_GET['id']) || empty($_GET['id'])){
+            $session->message('Complaint Not Found');
+            redirect_to("approval.php"); 
+        }
+        
+        $complaint = Complaint::find_by_id($_GET['id']);
+
+        // note approval validation according to position
+        // #role base validation
+        if($employee_location[0]->emp_sub_role == 'Commercial Head'){
+
+            if(empty($complaint->cna_crm_head)){
+                $session->message("The CRM Head have not approved this complaint yet, Please get approval from CRM Head first");
+                redirect_to("approval.php");
+            }
+        
+        } elseif($employee_location[0]->emp_sub_role == 'Plant Chief - CN'){
+        
+            if(empty($complaint->cna_crm_head)){
+                $session->message("The CRM Head have not approved this complaint yet, Please get approval from CRM Head first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_commercial_head)){
+                $session->message("The Commercial Head have not approved this complaint yet, Please get approval from Commercial Head first");
+                redirect_to("approval.php");
+            }
+        
+        } elseif($employee_location[0]->emp_sub_role == 'Sales Head'){
+        
+            if(empty($complaint->cna_crm_head)){
+                $session->message("The CRM Head have not approved this complaint yet, Please get approval from CRM Head first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_commercial_head)){
+                $session->message("The Commercial Head have not approved this complaint yet, Please get approval from Commercial Head first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_plant_chief)){
+                $session->message("The Plant Chief have not approved this complaint yet, Please get approval from Plant Chief first");
+                redirect_to("approval.php");
+            }
+        
+        }elseif($employee_location[0]->emp_sub_role == 'CFO'){
+        	//todo - recheck - cfo or cna_md - there are either one of them
+            
+            if(empty($complaint->cna_crm_head)){
+                $session->message("The CRM Head have not approved this complaint yet, Please get approval from CRM Head first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_commercial_head)){
+                $session->message("The Commercial Head have not approved this complaint yet, Please get approval from Commercial Head first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_plant_chief)){
+                $session->message("The Plant Chief have not approved this complaint yet, Please get approval from Plant Chief first");
+                redirect_to("approval.php");
+            } elseif(empty($complaint->cna_sales_head)){
+                $session->message("The Sales Head have not approved this complaint yet, Please get approval from Sales Head first");
+                redirect_to("approval.php");
+            }
+        
+        }
+
+	} else { redirect_to("logout.php"); }
+
+
+    // this section is copied to upper side for #role base validation of approval
+	// if(!isset($_GET['id']) || empty($_GET['id'])){
+	// 	$session->message('Complaint Not Found');
+	// 	redirect_to("approval.php"); 
+	// }
+	
+	// $complaint = Complaint::find_by_id($_GET['id']);
+
+	$found_appr_note = ApprovalNote::find_by_comp_id($_GET['id']);
+		
+	$appr_note = ApprovalNote::find_by_id($found_appr_note->id);
+
+
+	$product_id = Product::find_product_id($complaint->business_vertical,$complaint->plant_location,$complaint->product);
+
+	//print_r($product_id);
+
+
+	if($product_id){
+		$employee_loc = EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"CRM - Head");
+
+		if($employee_loc){
+			$cna_crm_head_name = $employee_loc->emp_name;
+
+			if(empty($_POST['customer_name']) || empty($_POST['nature_of_complaint']) || empty($_POST['complait_reference']) || empty($_POST['name_of_sm_sc_t'])
+			 	|| empty($_POST['complait_reg_date']) || empty($_POST['responsibility']) || empty($_POST['material_details']) || empty($_POST['billing_doc_no'])
+			    || empty($_POST['total_qty_rejc']) || empty($_POST['billing_doc_date']) || empty($_POST['basic_sale_price'])
+			 ) {
+				// Success
+				$session->message("Enter Mandatory Fields");
+				redirect_to("approval.php");
+			}
+			
+			if(empty($_POST['qty_acpt_steel_mill']) && empty($_POST['qty_scrp_auc_serv_cent']) && empty($_POST['qty_dlv_customer'])) {
+				// Success
+				$session->message("Enter any One Quantity (t)");
+				redirect_to("approval.php");
+			}
+
+			if(empty($_POST['debit_note_sal_rate_sale_value']) || $_POST['debit_note_sal_rate_sale_value'] == 0 ) {
+				// Success
+				$session->message("Debit note (purchase price/t) / Salvage rate / Sale value");
+				redirect_to("approval.php");
+			}
+			
+			$complait_reg_date = $_POST['complait_reg_date']; 
+			$complait_reg_date = strtotime($complait_reg_date); 
+			$complait_reg_date = date("Y-m-d", $complait_reg_date);
+
+			$billing_doc_date = $_POST['billing_doc_date']; 
+			$billing_doc_date = strtotime($billing_doc_date); 
+			$billing_doc_date = date("Y-m-d", $billing_doc_date);
+			
+			
+			$found_appr_note = ApprovalNote::find_by_comp_id($_GET['id']);
+			
+			if($found_appr_note){
+				echo "found_appr_note";
+				$appr_note = ApprovalNote::find_by_id($found_appr_note->id);
+
+				if($appr_note){
+					echo "appr_note";
+				}
+				$appr_note->complaint_id			= $complaint->id;
+				$appr_note->customer_id				= $complaint->customer_id;
+				$appr_note->company_name			= $complaint->company_name;
+				$appr_note->ticket_no				= $complaint->ticket_no;
+
+				$appr_note->customer_name			= $_POST['customer_name'];
+				$appr_note->nature_of_complaint		= $_POST['nature_of_complaint'];
+				$appr_note->complait_reference		= $_POST['complait_reference'];
+				$appr_note->name_of_sm_sc_t			= $_POST['name_of_sm_sc_t'];
+				$appr_note->complait_reg_date		= $complait_reg_date;
+				$appr_note->responsibility			= $_POST['responsibility'];
+				$appr_note->material_details		= $_POST['material_details'];
+				$appr_note->billing_doc_no			= $_POST['billing_doc_no'];
+				$appr_note->total_qty_rejc			= $_POST['total_qty_rejc'];
+				$appr_note->billing_doc_date		= $billing_doc_date;
+				$appr_note->basic_sale_price_txt	= $_POST['basic_sale_price_txt'];
+				$appr_note->basic_sale_price		= $_POST['basic_sale_price'];
+				$appr_note->sales_value				= $_POST['sales_value'];
+				$appr_note->cgst					= $_POST['cgst'];
+				$appr_note->sgst					= $_POST['sgst'];
+				$appr_note->cost_inc_customer_txt	= $_POST['cost_inc_customer_txt'];
+				$appr_note->cost_inc_customer		= $_POST['cost_inc_customer'];
+				$appr_note->salvage_value_txt		= $_POST['salvage_value_txt'];
+				$appr_note->salvage_value			= $_POST['salvage_value'];
+				$appr_note->credit_note_iss_cust	= $_POST['credit_note_iss_cust'];
+				//$appr_note->debit_note_supplier		= $_POST['debit_note_supplier'];
+				$appr_note->qty_acpt_steel_mill		= $_POST['qty_acpt_steel_mill'];
+				$appr_note->qty_scrp_auc_serv_cent	= $_POST['qty_scrp_auc_serv_cent'];
+				$appr_note->qty_dlv_customer		= $_POST['qty_dlv_customer'];
+				$appr_note->debit_salvage_sale_txt		= !empty($_POST['debit_salvage_sale_txt']) ? $_POST['debit_salvage_sale_txt'] : "" ;
+				$appr_note->debit_note_sal_rate_sale_value		= $_POST['debit_note_sal_rate_sale_value'];
+				$appr_note->value					= $_POST['value'];
+				$appr_note->loss_cgst				= $_POST['loss_cgst'];
+				$appr_note->loss_sgst				= $_POST['loss_sgst'];
+				$appr_note->oth_exp_inc_mill		= $_POST['oth_exp_inc_mill'];
+				$appr_note->oth_exp_debited			= $_POST['oth_exp_debited'];
+				$appr_note->compensation_exp		= $_POST['compensation_exp'];
+				$appr_note->debit_note_iss_supplier	= $_POST['debit_note_iss_supplier'];
+				$appr_note->loss_from_rejection		= $_POST['loss_from_rejection'];
+				$appr_note->recoverable_transporter	= $_POST['recoverable_transporter'];
+				$appr_note->net_loss				= $_POST['net_loss'];
+				//$appr_note->remark					= nl2br($_POST['verify_remark']);
+				
+				$appr_note->date_					= date("Y-m-d");
+				$appr_note->time_					= date("H:i:s");
+				
+				$appr_note->save();	
+
+				$complaint->cna_crm_head				= "Yes";
+				$complaint->cna_crm_head_name			= $cna_crm_head_name;
+				$complaint->cna_crm_head_date			= date("Y-m-d");	
+
+			}
+
+			$employee_loc = EmployeeLocation::find_by_productId_emp_role($product_id->id,"Commercial Head");
+			$mail = new PHPMailer;
+
+			$mail->IsMail();                            // Set mailer to use SMTP
+			$mail->Host = '172.32.0.173';             // Specify main and backup SMTP servers
+			$mail->SMTPAuth = false;                     // Enable SMTP authentication
+			$mail->Username = '';          // SMTP username
+			$mail->Password = ''; // SMTP password
+			//$mail->SMTPSecure = 'ssl';                  // Enable TLS encryption, `ssl` also accepted
+			$mail->Port = 25;                          // TCP port to connect to
+
+			//$mail->SMTPDebug = 2;
+			$mail->Mailer = "smtp";
+			$mail->Priority = 1;
+			$mail->setFrom('crm.accelo@emailmahindra.com', 'Mahindra Accelo');
+			//$mail->addAddress('salvi.suvarna@mahindra.com','Salvi Suvarna');   // Add a recipient
+			$mail->addAddress($employee_loc->emp_email,$employee_loc->emp_name);   // Add a recipient
+			$mail->addCC('salvi.suvarna@mahindra.com','Salvi Suvarna');
+			$mail->addCC('gajelli.lalita@mahindra.com','Lalita Gajelli');
+			//$mail->addBCC('bcc@example.com');
+
+			$mail->isHTML(true);  // Set email format to HTML
+
+			$bodyContent = "
+				<table  cellpadding='0' cellspacing='0' border='0' align='left' style=' background:#fff;width:700px;  min-width:300px; color:#262626; font-size:17px; font-family: Verdana, Geneva, sans-serif'>
+					<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+					<tr>
+					<td  cellpadding='0' cellspacing='0' border='0' width='100%' style='display:block;'>
+					<table border='0' style=' padding:30px '>
+
+					<tr>
+					<td style='line-height:23px'>
+
+					<p>Dear {$employee_loc->emp_name}, </p>
+
+					<p>Requesting you to approve the Approval Note for complaint ID {$complaint->ticket_no} by clicking on link below</p>		
+
+					<p><strong>Complaint details are</strong><br />
+					<strong>Customer Name :</strong> {$complaint->company_name}<br />
+					<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+					<strong>Source :</strong> {$complaint->identify_source}<br />
+
+					{$complaint->emp_name} and team has analysed & resolved the complaint.<br />
+
+					The Approval Note for the same has been created & below is the link <br />
+
+					<a style=' text-decoration:none; color:#1774b5' href='https://www.accelokonnect.com/crm/administrator/approver/approval.php'>https://www.accelokonnect.com/crm/administrator/approver/approval.php</a>
+					
+					</p>  
+
+					<p>Thanking You! </p>		
+					<p>Warm Regards, <br />
+					CRM Team <br />
+					<img src='https://www.accelokonnect.com/crm/administrator/images/logo.png' /></p>  
+					<p><i>Note: This is an auto generated e-mail, hence please do not reply.</i></p>
+
+					</td>
+					</tr>
+					</table>
+					</td>
+					</tr>
+
+					<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+				</table>
+			";
+
+			$mail->Subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID #{$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type}";
+			$mail->Body    = $bodyContent; 
+		} else {
+			$employee_location = EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"Commercial Head");
+
+			if($employee_location){
+				$cna_commercial_head = $employee_location->emp_name;
+
+				$employee_loc = EmployeeLocation::find_by_productId_emp_role($product_id->id,"Plant Chief - AN");
+				$mail = new PHPMailer;
+
+				$mail->IsMail();                            // Set mailer to use SMTP
+				$mail->Host = '172.32.0.173';             // Specify main and backup SMTP servers
+				$mail->SMTPAuth = false;                     // Enable SMTP authentication
+				$mail->Username = '';          // SMTP username
+				$mail->Password = ''; // SMTP password
+				//$mail->SMTPSecure = 'ssl';                  // Enable TLS encryption, `ssl` also accepted
+				$mail->Port = 25;                          // TCP port to connect to
+
+				//$mail->SMTPDebug = 2;
+				$mail->Mailer = "smtp";
+				$mail->Priority = 1;
+				$mail->setFrom('crm.accelo@emailmahindra.com', 'Mahindra Accelo');
+				//$mail->addAddress('salvi.suvarna@mahindra.com','Salvi Suvarna');   // Add a recipient
+				$mail->addAddress($employee_loc->emp_email,$employee_loc->emp_name);   // Add a recipient
+				$mail->addCC('salvi.suvarna@mahindra.com','Salvi Suvarna');
+				$mail->addCC('gajelli.lalita@mahindra.com','Lalita Gajelli');
+				//$mail->addBCC('bcc@example.com');
+
+				$mail->isHTML(true);  // Set email format to HTML
+
+				$bodyContent = "
+					<table  cellpadding='0' cellspacing='0' border='0' align='left' style=' background:#fff;width:700px;  min-width:300px; color:#262626; font-size:17px; font-family: Verdana, Geneva, sans-serif'>
+					<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+					<tr>
+					<td  cellpadding='0' cellspacing='0' border='0' width='100%' style='display:block;'>
+					<table border='0' style=' padding:30px '>
+
+					<tr>
+					<td style='line-height:23px'>
+
+					<p>Dear {$employee_loc->emp_name}, </p>
+
+					<p>Requesting you to approve the Approval Note for complaint ID {$complaint->ticket_no} by clicking on link below</p>		
+
+					<p><strong>Complaint details are</strong><br />
+					<strong>Customer Name :</strong> {$complaint->company_name}<br />
+					<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+					<strong>Source :</strong> {$complaint->identify_source}<br />
+
+					{$complaint->emp_name} and team has analysed & resolved the complaint.<br />
+
+					The Approval Note for the same has been created & below is the link <br />
+
+					<a style=' text-decoration:none; color:#1774b5' href='https://www.accelokonnect.com/crm/administrator/approver/approval.php'>https://www.accelokonnect.com/crm/administrator/approver/approval.php</a>
+					
+					</p>  
+
+					<p>Thanking You! </p>		
+					<p>Warm Regards, <br />
+					CRM Team <br />
+					<img src='https://www.accelokonnect.com/crm/administrator/images/logo.png' /></p>  
+					<p><i>Note: This is an auto generated e-mail, hence please do not reply.</i></p>
+
+					</td>
+					</tr>
+					</table>
+					</td>
+					</tr>
+
+					<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+				</table>
+				";
+
+				$mail->Subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID #{$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type}";
+				$mail->Body    = $bodyContent;
+
+				$complaint->cna_commercial_head				= "Yes";
+				$complaint->cna_commercial_head_name		= $cna_commercial_head;
+				$complaint->cna_commercial_head_date		= date("Y-m-d");
+				
+			} else {
+				$employee_location 	= EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"Plant Chief - AN");
+
+				if($employee_location){
+					$cna_plant_chief 	= $employee_location->emp_name;
+
+					$employee_loc = EmployeeLocation::find_by_productId_emp_role($product_id->id,"Sales Head");
+					$mail = new PHPMailer;
+
+					$mail->IsMail();                            // Set mailer to use SMTP
+					$mail->Host = '172.32.0.173';             // Specify main and backup SMTP servers
+					$mail->SMTPAuth = false;                     // Enable SMTP authentication
+					$mail->Username = '';          // SMTP username
+					$mail->Password = ''; // SMTP password
+					//$mail->SMTPSecure = 'ssl';                  // Enable TLS encryption, `ssl` also accepted
+					$mail->Port = 25;                          // TCP port to connect to
+
+					//$mail->SMTPDebug = 2;
+					$mail->Mailer = "smtp";
+					$mail->Priority = 1;
+					$mail->setFrom('crm.accelo@emailmahindra.com', 'Mahindra Accelo');
+					//$mail->addAddress('salvi.suvarna@mahindra.com','Salvi Suvarna');   // Add a recipient
+					$mail->addAddress($employee_loc->emp_email,$employee_loc->emp_name);   // Add a recipient
+					$mail->addCC('salvi.suvarna@mahindra.com','Salvi Suvarna');
+					$mail->addCC('gajelli.lalita@mahindra.com','Lalita Gajelli');
+					//$mail->addBCC('bcc@example.com');
+
+					$mail->isHTML(true);  // Set email format to HTML
+
+					$bodyContent = "
+						<table  cellpadding='0' cellspacing='0' border='0' align='left' style=' background:#fff;width:700px;  min-width:300px; color:#262626; font-size:17px; font-family: Verdana, Geneva, sans-serif'>
+							<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+							<tr>
+							<td  cellpadding='0' cellspacing='0' border='0' width='100%' style='display:block;'>
+							<table border='0' style=' padding:30px '>
+
+							<tr>
+							<td style='line-height:23px'>
+
+							<p>Dear {$employee_loc->emp_name}, </p>
+
+							<p>Requesting you to approve the Approval Note for complaint ID {$complaint->ticket_no} by clicking on link below</p>		
+
+							<p><strong>Complaint details are</strong><br />
+							<strong>Customer Name :</strong> {$complaint->company_name}<br />
+							<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+							<strong>Source :</strong> {$complaint->identify_source}<br />
+
+							{$complaint->emp_name} and team has analysed & resolved the complaint.<br />
+
+							The Approval Note for the same has been created & below is the link <br />
+
+							<a style=' text-decoration:none; color:#1774b5' href='https://www.accelokonnect.com/crm/administrator/approver/approval.php'>https://www.accelokonnect.com/crm/administrator/approver/approval.php</a>
+							
+							</p>  
+
+							<p>Thanking You! </p>		
+							<p>Warm Regards, <br />
+							CRM Team <br />
+							<img src='https://www.accelokonnect.com/crm/administrator/images/logo.png' /></p>  
+							<p><i>Note: This is an auto generated e-mail, hence please do not reply.</i></p>
+
+							</td>
+							</tr>
+							</table>
+							</td>
+							</tr>
+
+							<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+						</table>
+					";
+
+					$mail->Subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID #{$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type}";
+					$mail->Body    = $bodyContent;
+
+					$complaint->cna_plant_chief					= "Yes";
+					$complaint->cna_plant_chief_name			= $cna_plant_chief;
+					$complaint->cna_plant_chief_date			= date("Y-m-d");
+
+				} else {
+					$employee_location 	= EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"Sales Head");
+
+					if($employee_location){
+						$cna_sales_head 	= $employee_location->emp_name;
+
+						$employee_loc = EmployeeLocation::find_by_productId_emp_role($product_id->id,"CFO");
+						$mail = new PHPMailer;
+
+						$mail->IsMail();                            // Set mailer to use SMTP
+						$mail->Host = '172.32.0.173';             // Specify main and backup SMTP servers
+						$mail->SMTPAuth = false;                     // Enable SMTP authentication
+						$mail->Username = '';          // SMTP username
+						$mail->Password = ''; // SMTP password
+						//$mail->SMTPSecure = 'ssl';                  // Enable TLS encryption, `ssl` also accepted
+						$mail->Port = 25;                          // TCP port to connect to
+
+						//$mail->SMTPDebug = 2;
+						$mail->Mailer = "smtp";
+						$mail->Priority = 1;
+						$mail->setFrom('crm.accelo@emailmahindra.com', 'Mahindra Accelo');
+						//$mail->addAddress('salvi.suvarna@mahindra.com','Salvi Suvarna');   // Add a recipient
+						$mail->addAddress($employee_loc->emp_email,$employee_loc->emp_name);   // Add a recipient
+						//$mail->addCC('mithun@agency09.in','mithun');
+						//$mail->addCC('richa@agency09.in','richa');
+						$mail->addCC('salvi.suvarna@mahindra.com','Salvi Suvarna');
+						$mail->addCC('gajelli.lalita@mahindra.com','Lalita Gajelli');
+						//$mail->addBCC('bcc@example.com');
+
+						$mail->isHTML(true);  // Set email format to HTML
+
+						$bodyContent = "
+							<table  cellpadding='0' cellspacing='0' border='0' align='left' style=' background:#fff;width:700px;  min-width:300px; color:#262626; font-size:17px; font-family: Verdana, Geneva, sans-serif'>
+								<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+								<tr>
+								<td  cellpadding='0' cellspacing='0' border='0' width='100%' style='display:block;'>
+								<table border='0' style=' padding:30px '>
+
+								<tr>
+								<td style='line-height:23px'>
+
+								<p>Dear {$employee_loc->emp_name}, </p>
+
+								<p>Requesting you to approve the Approval Note for complaint ID {$complaint->ticket_no} by clicking on link below</p>		
+
+								<p><strong>Complaint details are</strong><br />
+								<strong>Customer Name :</strong> {$complaint->company_name}<br />
+								<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+								<strong>Source :</strong> {$complaint->identify_source}<br />
+
+								{$complaint->emp_name} and team has analysed & resolved the complaint.<br />
+
+								The Approval Note for the same has been created & below is the link <br />
+
+								<a style=' text-decoration:none; color:#1774b5' href='https://www.accelokonnect.com/crm/administrator/approver/approval.php'>https://www.accelokonnect.com/crm/administrator/approver/approval.php</a>
+								
+								</p>  
+
+								<p>Thanking You! </p>		
+								<p>Warm Regards, <br />
+								CRM Team <br />
+								<img src='https://www.accelokonnect.com/crm/administrator/images/logo.png' /></p>  
+								<p><i>Note: This is an auto generated e-mail, hence please do not reply.</i></p>
+
+								</td>
+								</tr>
+								</table>
+								</td>
+								</tr>
+
+								<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+							</table>
+						";
+
+						$mail->Subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID #{$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type}";
+						$mail->Body    = $bodyContent;
+
+						$complaint->cna_sales_head					= "Yes";
+						$complaint->cna_sales_head_name				= $cna_sales_head;
+						$complaint->cna_sales_head_date				= date("Y-m-d");
+
+
+
+					} else {
+						$employee_location 	= EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"CFO");
+
+						if($employee_location){
+							$cna_cfo 			= $employee_location->emp_name;
+
+							$employee_loc = EmployeeLocation::find_by_productId_emp_role($product_id->id,"MD");
+							$mail = new PHPMailer;
+
+							$mail->IsMail();                            // Set mailer to use SMTP
+							$mail->Host = '172.32.0.173';             // Specify main and backup SMTP servers
+							$mail->SMTPAuth = false;                     // Enable SMTP authentication
+							$mail->Username = '';          // SMTP username
+							$mail->Password = ''; // SMTP password
+							//$mail->SMTPSecure = 'ssl';                  // Enable TLS encryption, `ssl` also accepted
+							$mail->Port = 25;                          // TCP port to connect to
+
+							//$mail->SMTPDebug = 2;
+							$mail->Mailer = "smtp";
+							$mail->Priority = 1;
+							$mail->setFrom('crm.accelo@emailmahindra.com', 'Mahindra Accelo');
+							//$mail->addAddress('salvi.suvarna@mahindra.com','Salvi Suvarna');   // Add a recipient
+							$mail->addAddress($employee_loc->emp_email,$employee_loc->emp_name);   // Add a recipient
+							$mail->addCC('salvi.suvarna@mahindra.com','Salvi Suvarna');
+							$mail->addCC('gajelli.lalita@mahindra.com','Lalita Gajelli');
+							//$mail->addBCC('bcc@example.com');
+
+							$mail->isHTML(true);  // Set email format to HTML
+
+							$bodyContent = "
+
+								<table  cellpadding='0' cellspacing='0' border='0' align='left' style=' background:#fff;width:700px;  min-width:300px; color:#262626; font-size:17px; font-family: Verdana, Geneva, sans-serif'>
+
+									<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+									<tr>
+									<td  cellpadding='0' cellspacing='0' border='0' width='100%' style='display:block;'>
+									<table border='0' style=' padding:30px '>
+
+									<tr>
+									<td style='line-height:23px'>
+
+									<p>Dear {$employee_loc->emp_name}, </p>
+
+									<p>The team has analysed & processed the complaint registered under Complaint ID- {$complaint->ticket_no}</p>		
+
+									<p><strong>Complaint Detail</strong><br />
+									<strong>Customer Name :</strong> {$complaint->company_name}<br />
+									<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+									<strong>Source :</strong> {$complaint->identify_source}<br />
+									<strong>Action to be taken :</strong> {$complaint->other_advice}<br />
+
+									{$complaint->emp_name} and team has prepared the Approval Note for the above Complaint <br />
+
+									Requesting you to approve the same. <br />
+									Below is the link : <br />
+									<a style=' text-decoration:none; color:#1774b5' href='https://www.accelokonnect.com/crm/administrator/approver/approval.php'>https://www.accelokonnect.com/crm/administrator/approver/approval.php</a>
+									
+									</p>  
+
+									<p>Thanking You! </p>		
+									<p>Warm Regards, <br />
+									CRM Team <br />
+									<img src='https://www.accelokonnect.com/crm/administrator/images/logo.png' /></p>  
+									<p><i>Note: This is an auto generated e-mail, hence please do not reply.</i></p>
+
+									</td>
+									</tr>
+									</table>
+									</td>
+									</tr>
+
+									<tr><td style='display:block'><img src='https://www.accelokonnect.com/crm/administrator/images/1.jpg' /></td></tr>
+								</table>								
+							";
+
+							$mail->Subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID #{$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type}";
+							$mail->Body    = $bodyContent;
+
+							if(isset($_POST['cna_md_status'])){
+								$complaint->cna_md_status			= "Yes";
+							} else {
+								$complaint->cna_md_status			= "No";
+								$complaint->emp_status				= "All Approved";
+							}
+							
+							$complaint->cna_cfo						= "Yes";
+							$complaint->cna_cfo_name				= $cna_cfo;
+							$complaint->cna_cfo_date				= date("Y-m-d");
+							//$complaint->status					= "Closed";
+
+						} else {
+							$employee_location 	= EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,$session->employee_id,"MD");
+							$cna_md 		= $employee_location->emp_name;
+
+							if(!$employee_location){								
+								$session->message('Approver Not Found');
+								redirect_to("approval.php"); 
+							}
+
+							$complaint->cna_md						= "Yes";
+							$complaint->cna_md_name					= $cna_md;
+							$complaint->cna_md_date					= date("Y-m-d");
+							$complaint->emp_status					= "All Approved";
+							
+							//$complaint->status					= "Closed";
+						} 
+						
+					} 
+					
+				} 
+
+				
+			} 
+			
+		} 
+	} else {
+		$session->message('Product Not Found');
+		redirect_to("approval.php"); 
+	}
+
+	
+	//$employee_loc = EmployeeLocation::find_by_productId_emp_id_emp_role($product_id->id,"Commercial Head");
+
+	
+
+	//print_r($employee_loc);
+
+
+	
+	
+	//return false;
+
+
+
+	
+	//$complaint->identify_source				= $_POST['id_source'];
+	
+	//$employee_loc = EmployeeLocation::find_by_emp_id($session->employee_id);
+	
+	
+
+    /*	if($employee_loc->emp_sub_role == "CRM - Head"){		 
+					
+	} else if($employee_loc->emp_sub_role == "Commercial Head"){
+		
+	} else if($employee_loc->emp_sub_role == "Plant Chief - AN"){
+		
+	} else if($employee_loc->emp_sub_role == "Sales Head"){
+		
+
+	} else if($employee_loc->emp_sub_role == "CFO"){
+		
+		
+	} else if($employee_loc->emp_sub_role == "MD"){
+		
+	} else {
+		$session->message("Approver Not Found   2");
+		redirect_to("approval.php");
+	}*/
+
+
+	if($complaint->save()) {
+		// Success
+
+		if(isset($_POST['approver_remark'])){
+			$approval_note = ApprovalNote::find_by_comp_id($_GET['id']);
+			$approval_note->approver_remark = nl2br($_POST['approver_remark']);
+			$approval_note->save();
+		}
+
+		if($employee_location->emp_sub_role == "CFO"){
+			if($_POST['cna_md_status'] == "Yes"){
+				$mail->send();
+			} 		
+		} else if($employee_location->emp_sub_role != "CFO"){
+			if($employee_location->emp_sub_role != "MD"){
+				$mail->send();
+			}
+		}
+
+		// $session->message("Approval Note Approved");
+		// redirect_to("approval.php");
+
+		?>
+
+		<!-- Success Alert Modal -->
+		<div id="success-alert-modal" data-backdrop="static" data-keyboard="false" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+			<div class="modal-dialog modal-sm">
+				<div class="modal-content modal-filled bg-success">
+					<div class="modal-body p-4">
+						<div class="text-center">
+							<i class="dripicons-checkmark h1"></i>
+							<h2 class="mt-2">Success</h2>
+							<p class="mt-3" style="font-size:18px;">
+								You have successfully approved Approval Note.
+							</p>
+							<a href="approval.php" class="btn btn-light my-2">Continue</a>
+						</div>
+					</div>
+				</div><!-- /.modal-content -->
+			</div> <!-- /.modal-dialog -->
+		</div><!-- /.modal -->
+	<?php		   
+		
+	} else {
+		// Failure
+		$session->message("Fail to Approve Approval Note");
+		redirect_to("approval.php");
+	}
+
+
+
+
+
+?>
+
+
