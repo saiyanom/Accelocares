@@ -1,4 +1,6 @@
-<?php 
+﻿<?php 
+
+
 	ob_start();
 	require_once("../includes/initialize.php"); 
 	date_default_timezone_set('Asia/Calcutta');

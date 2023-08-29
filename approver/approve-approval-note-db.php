@@ -604,16 +604,19 @@
 
 		if($is_approved_by_all == 1){
 
-  			$subject = 'Complaint ID #'.$complaint->ticket_no.' has been approved by all concerned authorities.';
-  			$body = "Complaint ID #".$complaint->ticket_no." has been approved by all concerned authorities.<br /> 
-			<p><strong>Complaint Detail</strong><br />
-			<strong>Customer Name :</strong> {$complaint->company_name}<br />
-			<strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
-			<strong>Location : </strong> {$complaint->plant_location}<br />
-			<strong>Source :</strong> {$complaint->identify_source}<br />
-			Thank You! <br />
-			Warm Regards, <br />
-			CRM Team";
+  			$subject = "{$complaint->business_vertical} | {$complaint->plant_location} | Complaint ID # {$complaint->ticket_no} | {$complaint->company_name} | {$complaint->complaint_type} has been approved by all concerned authorities.";
+			  $body = "<p>Complaint ID #'.$complaint->ticket_no.' has been approved by all concerned authorities. </p>
+			  <p><strong>Complaint detail are</strong><br />
+			  <strong>Customer Name :</strong> {$complaint->company_name}<br />
+			  <strong>Nature of Complaint :</strong> {$complaint->business_vertical}, {$complaint->complaint_type}<br />
+			  <strong>Location :</strong> {$complaint->plant_location}<br />
+			  <strong>Source :</strong> {$complaint->identify_source}<br />
+
+			  Thank You!<br /><br />
+
+			  Warm Regards, <br />
+			  CRM Team <br />
+			  </p>";
 
         $toArr = getLocationChampsDetails($product_id->id);
         // $ccArr = getLocationEmployeeByRole($product_id->id, "Commercial Head");

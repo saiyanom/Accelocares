@@ -1141,7 +1141,7 @@ $(document).ready(function() {
 
 		});	
 
-		if($("#id_source").val() == "Plant"){
+		if($("#id_source").val() != "Plant"){
 			//alert(qty_debit + " != " +total_qty_rejc);
 			num++;
 			$("#qty_acpt_steel_mill").css("border","1px solid #f00");
@@ -1149,7 +1149,7 @@ $(document).ready(function() {
 			$("#qty_dlv_customer").css("border","1px solid #f00");
 		} 	
 
-		console.log(num);
+		console.log('test employee');
 		console.log(qty_debit + " != " +total_qty_rejc);
 
 		if(num > 0){

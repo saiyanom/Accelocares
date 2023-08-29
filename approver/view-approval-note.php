@@ -955,11 +955,11 @@ if ($emp_sub_role_appr == "CRM - Head") {
 
     //if($id_source != "Plant" && total_qty_rejc != qty_debit){
       //alert(qty_debit + " != " +total_qty_rejc);
-      //num++;
-      //$("#qty_acpt_steel_mill").css("border","1px solid #f00");
+     // num++;
+     // $("#qty_acpt_steel_mill").css("border","1px solid #f00");
       //$("#qty_scrp_auc_serv_cent").css("border","1px solid #f00");
-      //$("#qty_dlv_customer").css("border","1px solid #f00");
-    //}   
+    // $("#qty_dlv_customer").css("border","1px solid #f00");
+ //  }   
 
     new_total_qty_rejc = total_qty_rejc.replace(/\d+/g, '')
 
